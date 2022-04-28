@@ -214,3 +214,243 @@ Change password:
 
 
 ([Table of Contents](#table-of-contents))
+
+## The Network
+
+### Firewall With UFW (Uncomplicated Firewall)
+
+**UFW** works by letting you configure rules that:
+
+- **allow** or **deny**
+- **input** or **output** traffic
+- **to** or **from** ports
+
+You can create rules by explicitly specifying the ports or with application configurations that specify the ports.
+
+#### Steps
+
+1. Install ufw.
+
+    On Debian based systems:
+
+    ``` bash
+    sudo apt install ufw
+    ```
+
+1. Allow all outgoing traffic:
+
+    ``` bash
+    sudo ufw default allow outgoing comment 'allow all outgoing traffic'
+    ```
+
+1. Deny all incoming traffic:
+
+    ``` bash
+    sudo ufw default deny incoming comment 'deny all incoming traffic'
+    ```
+
+1. Set the rules:
+
+    ``` bash
+    sudo ufw limit in 1221 comment 'allow SSH connections in'
+    ```
+
+    > ```
+    > Rules updated
+    > Rules updated (v6)
+    > ```
+
+1. Start ufw:
+
+    ``` bash
+    sudo ufw enable
+    ```
+
+    > ```
+    > Command may disrupt existing ssh connections. Proceed with operation (y|n)? y
+    > Firewall is active and enabled on system startup
+    > ```
+
+1. Fix ufw service not loading after a reboot
+
+    ufw (Uncomplicated Firewall) and Docker. Docker relies on iptables-persistent, which is an interface to a much more powerful and complicated firewall that many people would rather avoid. The problem here is that ufw and iptables-persistent are both ways for creating the same firewall.
+
+    `sudo nano /lib/systemd/system/ufw.service`
+
+    Add `After=netfilter-persistent.service` like this:
+
+    ```
+    [Unit]
+    Description=Uncomplicated firewall
+    Documentation=man:ufw(8)
+    DefaultDependencies=no
+    Before=network.target
+    After=netfilter-persistent.service
+
+    [Service]
+    Type=oneshot
+    RemainAfterExit=yes
+    ExecStart=/lib/ufw/ufw-init start quiet
+    ExecStop=/lib/ufw/ufw-init stop
+
+    [Install]
+    WantedBy=multi-user.target
+    ```
+
+1. If you want to see a status:
+
+    ``` bash
+    sudo ufw status
+    ```
+
+    > ```
+    > Status: active
+    > 
+    > To                         Action      From
+    > --                         ------      ----
+    > 22/tcp                     LIMIT       Anywhere                   # allow SSH connections in
+    > 22/tcp (v6)                LIMIT       Anywhere (v6)              # allow SSH connections in
+    > 
+    > 53                         ALLOW OUT   Anywhere                   # allow DNS calls out
+    > 123                        ALLOW OUT   Anywhere                   # allow NTP out
+    > 80/tcp                     ALLOW OUT   Anywhere                   # allow HTTP traffic out
+    > 443/tcp                    ALLOW OUT   Anywhere                   # allow HTTPS traffic out
+    > 21/tcp                     ALLOW OUT   Anywhere                   # allow FTP traffic out
+    > Mail submission            ALLOW OUT   Anywhere                   # allow mail out
+    > 43/tcp                     ALLOW OUT   Anywhere                   # allow whois
+    > 53 (v6)                    ALLOW OUT   Anywhere (v6)              # allow DNS calls out
+    > 123 (v6)                   ALLOW OUT   Anywhere (v6)              # allow NTP out
+    > 80/tcp (v6)                ALLOW OUT   Anywhere (v6)              # allow HTTP traffic out
+    > 443/tcp (v6)               ALLOW OUT   Anywhere (v6)              # allow HTTPS traffic out
+    > 21/tcp (v6)                ALLOW OUT   Anywhere (v6)              # allow FTP traffic out
+    > Mail submission (v6)       ALLOW OUT   Anywhere (v6)              # allow mail out
+    > 43/tcp (v6)                ALLOW OUT   Anywhere (v6)              # allow whois
+    > ```
+
+    or
+
+    ``` bash
+    sudo ufw status verbose
+    ```
+
+    > ```
+    > Status: active
+    > Logging: on (low)
+    > Default: deny (incoming), deny (outgoing), disabled (routed)
+    > New profiles: skip
+    > 
+    > To                         Action      From
+    > --                         ------      ----
+    > 22/tcp                     LIMIT IN    Anywhere                   # allow SSH connections in
+    > 22/tcp (v6)                LIMIT IN    Anywhere (v6)              # allow SSH connections in
+    > 
+    > 53                         ALLOW OUT   Anywhere                   # allow DNS calls out
+    > 123                        ALLOW OUT   Anywhere                   # allow NTP out
+    > 80/tcp                     ALLOW OUT   Anywhere                   # allow HTTP traffic out
+    > 443/tcp                    ALLOW OUT   Anywhere                   # allow HTTPS traffic out
+    > 21/tcp                     ALLOW OUT   Anywhere                   # allow FTP traffic out
+    > 587/tcp (Mail submission)  ALLOW OUT   Anywhere                   # allow mail out
+    > 43/tcp                     ALLOW OUT   Anywhere                   # allow whois
+    > 53 (v6)                    ALLOW OUT   Anywhere (v6)              # allow DNS calls out
+    > 123 (v6)                   ALLOW OUT   Anywhere (v6)              # allow NTP out
+    > 80/tcp (v6)                ALLOW OUT   Anywhere (v6)              # allow HTTP traffic out
+    > 443/tcp (v6)               ALLOW OUT   Anywhere (v6)              # allow HTTPS traffic out
+    > 21/tcp (v6)                ALLOW OUT   Anywhere (v6)              # allow FTP traffic out
+    > 587/tcp (Mail submission (v6)) ALLOW OUT   Anywhere (v6)              # allow mail out
+    > 43/tcp (v6)                ALLOW OUT   Anywhere (v6)              # allow whois
+    > ```
+
+#### Default Applications
+
+ufw ships with some default applications. You can see them with:
+
+``` bash
+sudo ufw app list
+```
+
+> ```
+> Available applications:
+>   AIM
+>   Bonjour
+>   CIFS
+>   DNS
+>   Deluge
+>   IMAP
+>   IMAPS
+>   IPP
+>   KTorrent
+>   Kerberos Admin
+>   Kerberos Full
+>   Kerberos KDC
+>   Kerberos Password
+>   LDAP
+>   LDAPS
+>   LPD
+>   MSN
+>   MSN SSL
+>   Mail submission
+>   NFS
+>   OpenSSH
+>   POP3
+>   POP3S
+>   PeopleNearby
+>   SMTP
+>   SSH
+>   Socks
+>   Telnet
+>   Transmission
+>   Transparent Proxy
+>   VNC
+>   WWW
+>   WWW Cache
+>   WWW Full
+>   WWW Secure
+>   XMPP
+>   Yahoo
+>   qBittorrent
+>   svnserve
+> ```
+
+To get details about the app, like which ports it includes, type:
+
+``` bash
+sudo ufw app info [app name]
+```
+
+> ``` bash
+> sudo ufw app info DNS
+> ```
+> 
+> ```
+> Profile: DNS
+> Title: Internet Domain Name Server
+> Description: Internet Domain Name Server
+> 
+> Port:
+>   53
+> ```
+
+#### Custom Application
+
+If you don't want to create rules by explicitly providing the port number(s), you can create your own application configurations. To do this, create a file in `/etc/ufw/applications.d`.
+
+For example, here is what you would use for [Plex](https://support.plex.tv/articles/201543147-what-network-ports-do-i-need-to-allow-through-my-firewall/):
+
+``` bash
+cat /etc/ufw/applications.d/plexmediaserver
+```
+
+> ```
+> [PlexMediaServer]
+> title=Plex Media Server
+> description=This opens up PlexMediaServer for http (32400), upnp, and autodiscovery.
+> ports=32469/tcp|32413/udp|1900/udp|32400/tcp|32412/udp|32410/udp|32414/udp|32400/udp
+> ```
+
+Then you can enable it like any other app:
+
+```bash
+sudo ufw allow plexmediaserver
+```
+
+([Table of Contents](#table-of-contents))
