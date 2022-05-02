@@ -15,6 +15,74 @@ Add User to Sudo:
 Change password:
 ```sudo passwd root```
 
+### Send email with msmtp
+
+#### Steps
+
+1. Install msmtp.
+
+    On Debian based system:
+    ```bash
+    sudo apt install msmtp
+    ```
+    
+1. Create a global config file.
+
+    ```bash
+    sudo nano /etc/msmtprc
+    ```
+    >```bash
+    >defaults
+    >tls on
+    >tls_trust_file /etc/ssl/certs/ca-certificates.crt
+    >logfile /tmp/msmtp.log
+    >
+    >account aruba
+    >host smtps.aruba.it
+    >port 465
+    >auth on
+    >from caldaia@chousesnc.it
+    >user caldaia@chousesnc.it
+    >password un......
+    >tls_starttls off
+    >domain chousesnc.it
+    >
+    >account default : aruba
+    >```
+
+1. Create a test email.
+
+    ```bash
+    sudo nano email.txt
+    ```
+    >```bash
+    >From: Test <caldaia@chousesnc.it>
+    >To: <rigibe@gmail.com>;
+    >Subject: Test!
+    >
+    >Test Email.
+    >```
+ 
+1. Send email.
+
+    ```bash
+    cat email.txt | msmtp -t
+    ```
+    
+1. Create symlink.
+
+    ```bash
+    sudo mv /usr/sbin/sendmail /usr/sbin/sendmail-old
+    sudo ln -s /usr/bin/msmtp /usr/sbin/sendmail
+    ```
+    
+1. Test send email.
+
+    ```bash
+    /bin/mail -v -s "test email" rigibe@gmail.com < /dev/null
+    cat email.txt | sendmail -t
+    ```
+
 ### Secure `/etc/ssh/sshd_config`
 
 #### Steps
@@ -452,5 +520,146 @@ Then you can enable it like any other app:
 ```bash
 sudo ufw allow plexmediaserver
 ```
+
+([Table of Contents](#table-of-contents))
+
+### iptables Intrusion Detection And Prevention with PSAD
+
+#### Why
+
+Even if you have a firewall to guard your doors, it is possible to try brute-forcing your way in any of the guarded doors. We want to monitor all network activity to detect potential intrusion attempts, such has repeated attempts to get in, and block them.
+
+#### Steps
+
+1. Install PSAD.
+
+    On Debian based systems:
+
+    ```bash
+    sudo apt install psad
+    ```
+    
+1. Make a backup of psad's configuration file `/etc/psad/psad.conf`:
+
+    ``` bash
+    sudo cp --archive /etc/psad/psad.conf /etc/psad/psad.conf-COPY-$(date +"%Y%m%d%H%M%S")
+    ```
+
+1. Review and update configuration options in `/etc/psad/psad.conf`. Pay special attention to these:
+
+   |Setting|Set To
+   |--|--|
+   |[`EMAIL_ADDRESSES`](http://www.cipherdyne.org/psad/docs/config.html#EMAIL_ADDRESSES)|your email address(s)|
+   |`HOSTNAME`|your server's hostname|
+   |[`ENABLE_AUTO_IDS`](http://www.cipherdyne.org/psad/docs/config.html#ENABLE_AUTO_IDS)|`ENABLE_AUTO_IDS Y;`|
+   |`ENABLE_AUTO_IDS_EMAILS`|`ENABLE_AUTO_IDS_EMAILS Y;`|
+   |`EXPECT_TCP_OPTIONS`|`EXPECT_TCP_OPTIONS Y;`|
+
+   Check the configuration file psad's documentation at http://www.cipherdyne.org/psad/docs/config.html for more details.
+
+1. <a name="psad_step4"></a>Now we need to make some changes to ufw so it works with psad by telling ufw to log all traffic so psad can analyze it. Do this by editing **two files** and adding these lines **at the end but before the COMMIT line**.
+
+    Make backups:
+
+    ``` bash
+    sudo cp --archive /etc/ufw/before.rules /etc/ufw/before.rules-COPY-$(date +"%Y%m%d%H%M%S")
+    sudo cp --archive /etc/ufw/before6.rules /etc/ufw/before6.rules-COPY-$(date +"%Y%m%d%H%M%S")
+    ```
+
+    Edit the files:
+
+    - `/etc/ufw/before.rules`
+    - `/etc/ufw/before6.rules`
+
+    And add add this **at the end but before the COMMIT line**:
+
+    ```
+    # log all traffic so psad can analyze
+    -A INPUT -j LOG --log-tcp-options --log-prefix "[IPTABLES] "
+    -A FORWARD -j LOG --log-tcp-options --log-prefix "[IPTABLES] "
+    ```
+
+    **Note**: We're adding a log prefix to all the iptables logs. We'll need this for [seperating iptables logs to their own file](#ns-separate-iptables-log-file).
+
+    For example:
+
+    > ```
+    > ...
+    > 
+    > # log all traffic so psad can analyze
+    > -A INPUT -j LOG --log-tcp-options --log-prefix "[IPTABLES] "
+    > -A FORWARD -j LOG --log-tcp-options --log-prefix "[IPTABLES] "
+    > 
+    > # don't delete the 'COMMIT' line or these rules won't be processed
+    > COMMIT
+    > ```
+
+1. Now we need to reload/restart ufw and psad for the changes to take effect:
+
+    ``` bash
+    sudo ufw reload
+
+    sudo psad -R
+    sudo psad --sig-update
+    sudo psad -H
+    ```
+
+1. Analyze iptables rules for errors:
+
+    ``` bash
+    sudo psad --fw-analyze
+    ```
+
+    > ```
+    > [+] Parsing INPUT chain rules.
+    > [+] Parsing INPUT chain rules.
+    > [+] Firewall config looks good.
+    > [+] Completed check of firewall ruleset.
+    > [+] Results in /var/log/psad/fw_check
+    > [+] Exiting.
+    > ```
+
+    **Note**: If there were any issues you will get an e-mail with the error.
+
+1. Check the status of psad:
+
+    ``` bash
+    sudo psad --Status
+    ```
+
+    > ```
+    > [-] psad: pid file /var/run/psad/psadwatchd.pid does not exist for psadwatchd on vm
+    > [+] psad_fw_read (pid: 3444)  %CPU: 0.0  %MEM: 2.2
+    >     Running since: Sat Feb 16 01:03:09 2019
+    > 
+    > [+] psad (pid: 3435)  %CPU: 0.2  %MEM: 2.7
+    >     Running since: Sat Feb 16 01:03:09 2019
+    >     Command line arguments: [none specified]
+    >     Alert email address(es): root@localhost
+    > 
+    > [+] Version: psad v2.4.3
+    > 
+    > [+] Top 50 signature matches:
+    >         [NONE]
+    > 
+    > [+] Top 25 attackers:
+    >         [NONE]
+    > 
+    > [+] Top 20 scanned ports:
+    >         [NONE]
+    > 
+    > [+] iptables log prefix counters:
+    >         [NONE]
+    > 
+    >     Total protocol packet counters:
+    > 
+    > [+] IP Status Detail:
+    >         [NONE]
+    > 
+    >     Total scan sources: 0
+    >     Total scan destinations: 0
+    > 
+    > [+] These results are available in: /var/log/psad/status.out
+    > ```
 
 ([Table of Contents](#table-of-contents))
